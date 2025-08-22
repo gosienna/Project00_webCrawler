@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "XPath Web Crawler",
+  "version": "1.0",
+  "description": "A simple extension to crawl web content using XPath.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/pickaxe_16x16.png",
+      "48": "images/pickaxe_48x48.png",
+      "128": "images/pickaxe_128x128.png"
+    }
+  },
+  "icons": {
+    "16": "images/pickaxe_16x16.png",
+    "48": "images/pickaxe_48x48.png",
+    "128": "images/pickaxe_128x128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
