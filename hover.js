@@ -45,7 +45,14 @@ const clickHandler = (e) => {
     e.stopPropagation();
 
     const xpath = getXPathForElement(e.target);
-    chrome.runtime.sendMessage({ action: "elementSelected", xpath: xpath });
+    const html = e.target.outerHTML;
+    const data = { action: "elementSelected", xpath: xpath, html: html };
+
+    // Save to storage as a reliable backup
+    chrome.storage.local.set({ lastSelectedElement: data });
+
+    // Send a message for a live update (if the popup is open)
+    chrome.runtime.sendMessage(data);
 
     window.xpathCrawler.toggleInspector(); // Disable inspector after selection
 };

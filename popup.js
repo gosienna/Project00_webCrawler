@@ -3,11 +3,29 @@ document.addEventListener('DOMContentLoaded', function () {
   const selectElementButton = document.getElementById('selectElementButton');
   const xpathInput = document.getElementById('xpathInput');
   const resultsTextarea = document.getElementById('results');
+  const htmlContentTextarea = document.getElementById('htmlContent');
 
-  // Listener for receiving messages from the content script
+  // Function to update the UI with data
+  function updateUI(data) {
+    if (data && data.xpath) {
+      xpathInput.value = data.xpath;
+    }
+    if (data && data.html) {
+      htmlContentTextarea.value = data.html;
+    }
+  }
+
+  // Load last selected element from storage when popup opens
+  chrome.storage.local.get('lastSelectedElement', (result) => {
+    if (result.lastSelectedElement) {
+      updateUI(result.lastSelectedElement);
+    }
+  });
+
+  // Listener for live updates from the content script
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "elementSelected") {
-      xpathInput.value = request.xpath;
+      updateUI(request);
     }
   });
 

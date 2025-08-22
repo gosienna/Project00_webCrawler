@@ -5,7 +5,8 @@
   "description": "A simple extension to crawl web content using XPath.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "action": {
     "default_popup": "popup.html",
