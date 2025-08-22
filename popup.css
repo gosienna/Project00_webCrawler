@@ -34,6 +34,18 @@ h1 {
   background-color: #45a049;
 }
 
+#selectElementButton {
+  padding: 10px;
+  background-color: #008CBA;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+#selectElementButton:hover {
+  background-color: #007B9A;
+}
+
 #results {
   width: 100%;
   height: 150px;
