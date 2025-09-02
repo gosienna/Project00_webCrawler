@@ -9,7 +9,6 @@
     "storage"
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "images/pickaxe_16x16.png",
       "48": "images/pickaxe_48x48.png",
@@ -21,10 +20,20 @@
     "48": "images/pickaxe_48x48.png",
     "128": "images/pickaxe_128x128.png"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["hover.js", "content.js"]
+      "js": ["hover.js", "content.js"],
+      "css": ["panel.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.html", "panel.js", "panel.css", "popup.js", "popup.css"],
+      "matches": ["<all_urls>"]
     }
   ]
 }
