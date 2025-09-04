@@ -7,11 +7,17 @@
 <body>
   <h1>XPath Web Crawler</h1>
   <div class="container">
+    <div class="switch-container">
+      <label class="switch">
+        <input type="checkbox" id="saveElementSwitch">
+        <span class="slider round"></span>
+      </label>
+      <span class="switch-label">Save Clicked Elements</span>
+    </div>
     <input type="text" id="xpathInput" placeholder="Enter XPath expression">
     <button id="crawlButton">Crawl</button>
-    <button id="selectElementButton">Select Element</button>
+    <button id="clearButton" class="clear-button">Clear Tracked Elements</button>
     <textarea id="results" readonly placeholder="Crawled text content will appear here..."></textarea>
-    <textarea id="htmlContent" readonly placeholder="Clicked element's HTML will appear here..."></textarea>
   </div>
   <script src="popup.js"></script>
 </body>
