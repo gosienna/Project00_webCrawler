@@ -1,149 +1,121 @@
 document.addEventListener('DOMContentLoaded', function () {
-  const crawlButton = document.getElementById('crawlButton');
   const clearButton = document.getElementById('clearButton');
-  const xpathInput = document.getElementById('xpathInput');
-  const resultsTextarea = document.getElementById('results');
+  const displayTest = document.getElementById('displayTest');
   const saveElementSwitch = document.getElementById('saveElementSwitch');
 
-  let savedElements = [];
+  let savedElementsTree = [];
 
-  function clearData() {
-    resultsTextarea.value = '';
-    xpathInput.value = '';
-    savedElements = [];
-    chrome.storage.local.set({ savedElements: [] });
+  function findParent(nodes, url) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node.href === url) {
+        return node;
+      }
+      if (node.children.length > 0) {
+        const found = findParent(node.children, url);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
   }
 
-  // Listen for messages from the content script
+  function renderTree(nodes, container) {
+    const ul = document.createElement('ul');
+    nodes.forEach(node => {
+      const li = document.createElement('li');
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `<div class="element-text">${node.text}</div>`;
+      
+      const copyButton = document.createElement('button');
+      copyButton.textContent = 'Copy HTML';
+      copyButton.addEventListener('click', () => {
+        const textarea = document.createElement('textarea');
+        textarea.value = node.html;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      });
+
+      item.appendChild(copyButton);
+      li.appendChild(item);
+
+      if (node.children.length > 0) {
+        const nestedContainer = document.createElement('div');
+        nestedContainer.className = 'nested';
+        renderTree(node.children, nestedContainer);
+        li.appendChild(nestedContainer);
+      }
+      ul.appendChild(li);
+    });
+    container.appendChild(ul);
+  }
+
+  function clearData() {
+    displayTest.innerHTML = '';
+    savedElementsTree = [];
+    chrome.storage.local.set({ savedElementsTree: [] });
+  }
+
   window.addEventListener('message', (event) => {
     if (event.data.action === 'clearData') {
       clearData();
     }
   });
 
-  // Listener for live updates from the content script
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "elementClicked") {
-      const elementData = {
-        html: request.html,
+      const newNode = {
         text: request.text,
-        tagName: request.tagName,
-        className: request.className,
-        id: request.id,
+        url: request.url,
         href: request.href,
-        src: request.src,
-        role: request.role,
-        tabindex: request.tabindex,
-        cursor: request.cursor,
-        timestamp: new Date().toISOString(),
-        url: window.location.href
+        html: request.html,
+        children: []
       };
-      
-      savedElements.push(elementData);
-      chrome.storage.local.set({ savedElements: savedElements });
-      
-      // Display formatted element data
-      const displayText = savedElements.map((element, index) => {
-        return `Element ${index + 1}:\n` +
-               `Tag: ${element.tagName}\n` +
-               `Text: ${element.text}\n` +
-               `Class: ${element.className}\n` +
-               `ID: ${element.id}\n` +
-               `Role: ${element.role || 'N/A'}\n` +
-               `TabIndex: ${element.tabindex || 'N/A'}\n` +
-               `Cursor: ${element.cursor}\n` +
-               `URL: ${element.href || element.src || 'N/A'}\n` +
-               `Timestamp: ${element.timestamp}\n` +
-               `Page: ${element.url}\n` +
-               `HTML: ${element.html}\n`;
-      }).join('\n---\n\n');
-      
-      resultsTextarea.value = displayText;
+
+      const parent = findParent(savedElementsTree, request.url);
+
+      if (parent) {
+        const isDuplicate = parent.children.some(item => item.text === newNode.text && item.url === newNode.url);
+        if (!isDuplicate) {
+          parent.children.push(newNode);
+        }
+      } else {
+        const isDuplicate = savedElementsTree.some(item => item.text === newNode.text && item.url === newNode.url);
+        if (!isDuplicate) {
+          savedElementsTree.push(newNode);
+        }
+      }
+
+      chrome.storage.local.set({ savedElementsTree: savedElementsTree });
+      displayTest.innerHTML = '';
+      renderTree(savedElementsTree, displayTest);
     }
   });
 
   saveElementSwitch.addEventListener('change', () => {
-    // Save the switch state to storage
-    chrome.storage.local.set({ saveElementsState: saveElementSwitch.checked });
-    
+    const saveState = saveElementSwitch.checked;
+    chrome.storage.local.set({ saveElementsState: saveState });
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "toggleSaveElement", save: saveElementSwitch.checked });
-      // Also notify background script to maintain state
-      chrome.runtime.sendMessage({ action: "toggleSaveElement", save: saveElementSwitch.checked });
-    });
-  });
-
-  crawlButton.addEventListener('click', () => {
-    const xpath = xpathInput.value;
-    if (!xpath) {
-      resultsTextarea.value = 'Please enter an XPath expression.';
-      return;
-    }
-
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "crawl", xpath: xpath }, (response) => {
-        if (chrome.runtime.lastError) {
-          resultsTextarea.value = 'Error: ' + chrome.runtime.lastError.message;
-        } else if (response && response.data) {
-          resultsTextarea.value = response.data.join('\n');
-        } else if (response && response.error) {
-          resultsTextarea.value = 'Error: ' + response.error;
-        } else {
-          resultsTextarea.value = 'No data found or an unknown error occurred.';
-        }
-      });
+      chrome.tabs.sendMessage(tabs[0].id, { action: "toggleSaveElement", save: saveState });
     });
   });
 
   clearButton.addEventListener('click', () => {
-    // Clear the tracked elements data
-    savedElements = [];
-    chrome.storage.local.set({ savedElements: [] });
-    resultsTextarea.value = '';
-    
-    // Show confirmation message
-    const originalPlaceholder = resultsTextarea.placeholder;
-    resultsTextarea.placeholder = 'Tracked elements cleared successfully!';
-    
-    // Reset placeholder after 2 seconds
-    setTimeout(() => {
-      resultsTextarea.placeholder = originalPlaceholder;
-    }, 2000);
+    clearData();
   });
 
-  // Load saved elements from storage
-  chrome.storage.local.get('savedElements', (result) => {
-    if (result.savedElements) {
-      savedElements = result.savedElements;
-      
-      // Display formatted element data
-      const displayText = savedElements.map((element, index) => {
-        return `Element ${index + 1}:\n` +
-               `Tag: ${element.tagName}\n` +
-               `Text: ${element.text}\n` +
-               `Class: ${element.className}\n` +
-               `ID: ${element.id}\n` +
-               `Role: ${element.role || 'N/A'}\n` +
-               `TabIndex: ${element.tabindex || 'N/A'}\n` +
-               `Cursor: ${element.cursor || 'N/A'}\n` +
-               `URL: ${element.href || element.src || 'N/A'}\n` +
-               `Timestamp: ${element.timestamp}\n` +
-               `Page: ${element.url}\n` +
-               `HTML: ${element.html}\n`;
-      }).join('\n---\n\n');
-      
-      resultsTextarea.value = displayText;
+  chrome.storage.local.get(['savedElementsTree', 'saveElementsState'], (result) => {
+    if (result.savedElementsTree) {
+      savedElementsTree = result.savedElementsTree;
+      displayTest.innerHTML = '';
+      renderTree(savedElementsTree, displayTest);
     }
-  });
-
-  // Load and restore the save elements switch state
-  chrome.storage.local.get('saveElementsState', (result) => {
     if (result.saveElementsState !== undefined) {
       saveElementSwitch.checked = result.saveElementsState;
-      // Notify content script of the current state
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: "toggleSaveElement", save: result.saveElementsState });
-      });
     }
   });
 });
