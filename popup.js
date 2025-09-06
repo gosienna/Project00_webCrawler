@@ -1,10 +1,23 @@
 document.addEventListener('DOMContentLoaded', function () {
+  console.log('DOM loaded, initializing...');
   const clearButton = document.getElementById('clearButton');
   const displayTest = document.getElementById('displayTest');
   const saveElementSwitch = document.getElementById('saveElementSwitch');
   const addInputBtn = document.getElementById('addInputBtn');
   const inputContainer = document.getElementById('inputContainer');
   const extractXPathBtn = document.getElementById('extractXPathBtn');
+  const downloadPdfsBtn = document.getElementById('downloadPdfsBtn');
+  const sendToGeminiBtn = document.getElementById('sendToGeminiBtn');
+  const geminiResponse = document.getElementById('geminiResponse');
+  
+  console.log('DOM elements found:');
+  console.log('clearButton:', clearButton);
+  console.log('displayTest:', displayTest);
+  console.log('saveElementSwitch:', saveElementSwitch);
+  console.log('addInputBtn:', addInputBtn);
+  console.log('inputContainer:', inputContainer);
+  console.log('extractXPathBtn:', extractXPathBtn);
+  console.log('downloadPdfsBtn:', downloadPdfsBtn);
 
   let savedElementsTree = [];
   let inputRowCount = 1;
@@ -56,7 +69,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function getAllInputTexts() {
     const textareas = inputContainer.querySelectorAll('.input-textarea');
-    return Array.from(textareas).map(textarea => textarea.value.trim()).filter(text => text.length > 0);
+    console.log('Found textareas:', textareas.length);
+    const values = Array.from(textareas).map(textarea => textarea.value.trim()).filter(text => text.length > 0);
+    console.log('XPath expressions found:', values);
+    return values;
   }
 
   function clearAllInputs() {
@@ -103,24 +119,252 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // Function to collect all PDF elements from the tree
+  function collectAllPdfElements(elements) {
+    let pdfElements = [];
+    
+    elements.forEach(element => {
+      if (element.isPdf && element.href) {
+        pdfElements.push({
+          text: element.text,
+          href: element.href,
+          url: element.url
+        });
+      }
+      
+      // Recursively check children
+      if (element.children && element.children.length > 0) {
+        pdfElements = pdfElements.concat(collectAllPdfElements(element.children));
+      }
+    });
+    
+    return pdfElements;
+  }
+
+  // Function to download all PDF files
+  function downloadAllPdfs() {
+    const pdfElements = collectAllPdfElements(savedElementsTree);
+    
+    if (pdfElements.length === 0) {
+      alert('No PDF files found to download');
+      return;
+    }
+    
+    // Disable button during download
+    downloadPdfsBtn.disabled = true;
+    downloadPdfsBtn.textContent = `Downloading ${pdfElements.length} PDFs...`;
+    
+    let downloadCount = 0;
+    let errorCount = 0;
+    
+    // Download each PDF
+    pdfElements.forEach((pdfElement, index) => {
+      setTimeout(() => {
+        try {
+          // Create a temporary anchor element to trigger download
+          const link = document.createElement('a');
+          link.href = pdfElement.href;
+          link.download = pdfElement.text.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+          link.target = '_blank';
+          
+          // Append to body, click, and remove
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          downloadCount++;
+        } catch (error) {
+          console.error('Error downloading PDF:', pdfElement.href, error);
+          errorCount++;
+        }
+        
+        // Update button text with progress
+        downloadPdfsBtn.textContent = `Downloading ${pdfElements.length} PDFs... (${downloadCount + errorCount}/${pdfElements.length})`;
+        
+        // Re-enable button when all downloads are complete
+        if (downloadCount + errorCount === pdfElements.length) {
+          setTimeout(() => {
+            downloadPdfsBtn.disabled = false;
+            downloadPdfsBtn.textContent = 'Download All PDFs';
+            
+            if (errorCount > 0) {
+              alert(`Downloaded ${downloadCount} PDFs successfully. ${errorCount} downloads failed.`);
+            } else {
+              alert(`Successfully downloaded ${downloadCount} PDF files!`);
+            }
+          }, 1000);
+        }
+      }, index * 500); // Stagger downloads by 500ms to avoid overwhelming the browser
+    });
+  }
+
+  // Gemini API Integration Functions
+  function getGeminiApiKey() {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['geminiApiKey'], (result) => {
+        resolve(result.geminiApiKey || null);
+      });
+    });
+  }
+
+  function setGeminiApiKey(apiKey) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ geminiApiKey: apiKey }, () => {
+        resolve();
+      });
+    });
+  }
+
+  function collectAllElementsForGemini(elements) {
+    let allElements = [];
+    
+    elements.forEach(element => {
+      allElements.push({
+        text: element.text,
+        url: element.url,
+        href: element.href,
+        tagName: element.tagName,
+        isPdf: element.isPdf
+      });
+      
+      // Recursively collect children
+      if (element.children && element.children.length > 0) {
+        allElements = allElements.concat(collectAllElementsForGemini(element.children));
+      }
+    });
+    
+    return allElements;
+  }
+
+  async function sendToGemini() {
+    // Check if we have any extracted elements
+    if (savedElementsTree.length === 0) {
+      showGeminiResponse('No extracted elements found. Please extract some elements first.', 'error');
+      return;
+    }
+
+    // Get API key
+    let apiKey = await getGeminiApiKey();
+    if (!apiKey) {
+      apiKey = prompt('Please enter your Gemini API key:');
+      if (!apiKey) {
+        showGeminiResponse('API key is required to use Gemini AI.', 'error');
+        return;
+      }
+      await setGeminiApiKey(apiKey);
+    }
+
+    // Disable button and show loading
+    sendToGeminiBtn.disabled = true;
+    sendToGeminiBtn.textContent = 'Sending to Gemini...';
+    showGeminiResponse('Sending data to Gemini AI...', 'loading');
+
+    try {
+      // Collect all elements
+      const allElements = collectAllElementsForGemini(savedElementsTree);
+      
+      // Prepare the prompt
+      const prompt = `Analyze the following web scraping data and provide insights:
+
+Total Elements: ${allElements.length}
+PDF Files Found: ${allElements.filter(el => el.isPdf).length}
+
+Elements Data:
+${JSON.stringify(allElements, null, 2)}
+
+Please provide:
+1. A summary of the extracted content
+2. Key insights about the data structure
+3. Notable patterns or trends
+4. Recommendations for further analysis
+
+Format your response in a clear, structured way.`;
+
+      // Call Gemini API
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 2048,
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        const geminiText = data.candidates[0].content.parts[0].text;
+        showGeminiResponse(geminiText, 'success');
+      } else {
+        throw new Error('Invalid response format from Gemini API');
+      }
+
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      showGeminiResponse(`Error: ${error.message}`, 'error');
+    } finally {
+      // Re-enable button
+      sendToGeminiBtn.disabled = false;
+      sendToGeminiBtn.textContent = 'Send to Gemini AI';
+    }
+  }
+
+  function showGeminiResponse(message, type = 'success') {
+    geminiResponse.innerHTML = '';
+    
+    if (type === 'loading') {
+      geminiResponse.innerHTML = `<p class="loading">${message}</p>`;
+    } else if (type === 'error') {
+      geminiResponse.innerHTML = `<div class="error">${message}</div>`;
+    } else {
+      geminiResponse.innerHTML = `
+        <h3>🤖 Gemini AI Analysis</h3>
+        <div>${message.replace(/\n/g, '<br>')}</div>
+      `;
+    }
+    
+    geminiResponse.classList.add('show');
+  }
+
   function extractElementsByXPath() {
+    console.log('extractElementsByXPath function called!');
     const xpathExpressions = getAllInputTexts();
+    console.log('XPath expressions:', xpathExpressions);
     
     if (xpathExpressions.length === 0) {
+      console.log('No XPath expressions found, showing alert');
       alert('Please enter at least one XPath expression');
       return;
     }
 
+    const isRecursive = true; // Always use recursive extraction
+
     // Disable button during extraction
     extractXPathBtn.disabled = true;
-    extractXPathBtn.textContent = 'Extracting...';
+    extractXPathBtn.textContent = 'Extracting (Recursive)...';
 
     // Send message to content script to extract elements
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
         chrome.tabs.sendMessage(tabs[0].id, { 
           action: "extractElementsByXPath", 
-          xpathExpressions: xpathExpressions 
+          xpathExpressions: xpathExpressions,
+          recursive: isRecursive
         }, (response) => {
           // Re-enable button
           extractXPathBtn.disabled = false;
@@ -134,35 +378,92 @@ document.addEventListener('DOMContentLoaded', function () {
           
           if (response && response.success) {
             if (response.elements && response.elements.length > 0) {
-              // Add extracted elements to savedElementsTree
-              response.elements.forEach(elementData => {
+              // Add extracted elements to savedElementsTree following the same pattern as click tracking
+              console.log('Processing extracted elements:', response.elements);
+              
+              // Function to add an element and its children to the tree
+              function addElementToTree(elementData) {
                 const newNode = {
                   text: elementData.text || 'XPath Element',
                   url: elementData.url || tabs[0].url,
                   href: elementData.href || '',
                   html: elementData.html || '',
                   xpath: elementData.xpath || '',
-                  children: []
+                  tagName: elementData.tagName || '',
+                  id: elementData.id || '',
+                  className: elementData.className || '',
+                  isPdf: elementData.isPdf || false,
+                  pdfInfo: elementData.pdfInfo || null,
+                  children: elementData.children || []
                 };
                 
-                // Check for duplicates before adding
-                const isDuplicate = savedElementsTree.some(item => 
-                  item.text === newNode.text && 
-                  item.url === newNode.url && 
-                  item.xpath === newNode.xpath
-                );
+                // For XPath extracted elements, we need to find the appropriate parent
+                // based on the element's URL (where it was found), not the current tab URL
+                console.log('Looking for parent for element:', elementData.text, 'with URL:', elementData.url);
+                const parent = findParent(savedElementsTree, elementData.url);
                 
-                if (!isDuplicate) {
-                  savedElementsTree.push(newNode);
+                if (parent) {
+                  // Check for duplicates in parent's children
+                  const isDuplicate = parent.children.some(item => 
+                    item.text === newNode.text && 
+                    item.url === newNode.url && 
+                    item.href === newNode.href
+                  );
+
+                  console.log('Is duplicate in parent children:', isDuplicate);
+                  if (!isDuplicate) {
+                    parent.children.push(newNode);
+                    console.log('Added to parent children. Parent now has', parent.children.length, 'children');
+                  }
+                } else {
+                  // Check for duplicates in root level
+                  const isDuplicate = savedElementsTree.some(item => 
+                    item.text === newNode.text && 
+                    item.url === newNode.url && 
+                    item.href === newNode.href
+                  );
+                  
+                  if (!isDuplicate) {
+                    savedElementsTree.push(newNode);
+                  }
                 }
+                
+                // Recursively add children elements to the tree as well
+                if (elementData.children && elementData.children.length > 0) {
+                  elementData.children.forEach(childElement => {
+                    addElementToTree(childElement);
+                  });
+                }
+              }
+              
+              // Process all extracted elements (including their children)
+              console.log('Total elements to process:', response.elements.length);
+              response.elements.forEach((elementData, index) => {
+                console.log(`Processing element ${index + 1}:`, elementData.text, 'from URL:', elementData.url);
+                addElementToTree(elementData);
               });
+              console.log('Final savedElementsTree length:', savedElementsTree.length);
               
               // Save to storage and update display
               chrome.storage.local.set({ savedElementsTree: savedElementsTree });
               displayTest.innerHTML = '';
               renderTree(savedElementsTree, displayTest);
               
-              alert(`Successfully extracted ${response.elements.length} elements`);
+              // Count all elements including children recursively
+              function countAllElements(elements) {
+                let count = 0;
+                elements.forEach(element => {
+                  count += 1; // Count the element itself
+                  if (element.children && element.children.length > 0) {
+                    count += countAllElements(element.children); // Recursively count children
+                  }
+                });
+                return count;
+              }
+              
+              const totalElements = countAllElements(response.elements);
+              
+              alert(`Successfully extracted ${response.elements.length} elements${isRecursive ? ` (${totalElements} total including children)` : ''}`);
             } else {
               alert('No elements found matching the XPath expressions');
             }
@@ -175,8 +476,18 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Event listeners for input functionality
+  console.log('Setting up event listeners...');
+  console.log('addInputBtn:', addInputBtn);
+  console.log('extractXPathBtn:', extractXPathBtn);
+  console.log('downloadPdfsBtn:', downloadPdfsBtn);
+  
   addInputBtn.addEventListener('click', addInputRow);
   extractXPathBtn.addEventListener('click', extractElementsByXPath);
+  downloadPdfsBtn.addEventListener('click', downloadAllPdfs);
+  sendToGeminiBtn.addEventListener('click', sendToGemini);
+  
+  console.log('Event listeners attached successfully');
+  
   
   // Add event listeners to existing remove buttons
   const existingRemoveButtons = inputContainer.querySelectorAll('.remove-btn');
@@ -191,9 +502,12 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   function findParent(nodes, url) {
+    console.log('findParent called with URL:', url, 'searching in', nodes.length, 'nodes');
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
+      console.log('Checking node:', node.text, 'href:', node.href, 'url:', node.url);
       if (node.href === url) {
+        console.log('Found matching parent by href');
         return node;
       }
       if (node.children.length > 0) {
@@ -203,16 +517,30 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
     }
+    console.log('No parent found for URL:', url);
     return null;
   }
 
   function renderTree(nodes, container) {
+    console.log('Rendering tree with nodes:', nodes);
     const ul = document.createElement('ul');
     nodes.forEach(node => {
       const li = document.createElement('li');
       const item = document.createElement('div');
       item.className = 'list-item';
-      item.innerHTML = `<div class="element-text">${node.text}</div>`;
+      
+      // Add PDF indicator if this is a PDF element
+      let pdfIndicator = '';
+      console.log('Processing node:', node.text, 'isPdf:', node.isPdf, 'href:', node.href);
+      if (node.isPdf) {
+        console.log('Found PDF element:', node.text, 'href:', node.href);
+        pdfIndicator = '<span class="pdf-indicator">PDF</span>';
+        item.classList.add('pdf-element');
+        console.log('Added pdf-element class to item, classes:', item.className);
+      }
+    
+      
+      item.innerHTML = `<div class="element-text">${node.text} ${pdfIndicator}</div>`;
       
       const copyButton = document.createElement('button');
       copyButton.textContent = 'Copy HTML';
@@ -229,6 +557,7 @@ document.addEventListener('DOMContentLoaded', function () {
       li.appendChild(item);
 
       if (node.children.length > 0) {
+        console.log(`Node "${node.text}" has ${node.children.length} children:`, node.children);
         const nestedContainer = document.createElement('div');
         nestedContainer.className = 'nested';
         renderTree(node.children, nestedContainer);
@@ -240,10 +569,18 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function clearData() {
+    // Clear display area
     displayTest.innerHTML = '';
+    
+    // Clear in-memory data
     savedElementsTree = [];
     clearAllInputs();
-    chrome.storage.local.set({ savedElementsTree: [] });
+    
+    // Clear persistent storage (preserve saveElementsState toggle)
+    chrome.storage.local.set({ 
+      savedElementsTree: [],
+      xpathInputData: []
+    });
   }
 
   window.addEventListener('message', (event) => {
@@ -260,6 +597,8 @@ document.addEventListener('DOMContentLoaded', function () {
         href: request.href, //where the element leading to
         html: request.html, //the html string of the element
         xpath: "", //potential xpath pattern that match this element
+        isPdf: request.isPdf || false,
+        pdfInfo: request.pdfInfo || null,
         children: []
       };
 
