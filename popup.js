@@ -70,9 +70,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (request.action === "elementClicked") {
       const newNode = {
         text: request.text,
-        url: request.url,
-        href: request.href,
-        html: request.html,
+        url: request.url, //element current url
+        href: request.href, //where the element leading to
+        html: request.html, //the html string of the element
+        xpath: "", //potential xpath pattern that match this element
         children: []
       };
 

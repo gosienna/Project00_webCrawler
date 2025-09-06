@@ -1,9 +1,9 @@
 #web-crawler-panel {
     position: fixed;
     top: 10px;
-    right: -350px; /* Start off-screen */
-    width: 350px;
-    height: 500px;
+    right: -400px; /* Start off-screen */
+    width: 400px;
+    height: 90vh;
     background-color: white;
     border: 1px solid #ccc;
     z-index: 9999;
