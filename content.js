@@ -38,6 +38,45 @@ function handleClick(event) {
     }
 }
 
+function extractElementsByXPath(xpathExpressions) {
+    const extractedElements = [];
+    
+    xpathExpressions.forEach(xpath => {
+        try {
+            // Create XPath result
+            const result = document.evaluate(
+                xpath,
+                document,
+                null,
+                XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+                null
+            );
+            
+            // Extract elements
+            for (let i = 0; i < result.snapshotLength; i++) {
+                const element = result.snapshotItem(i);
+                if (element) {
+                    extractedElements.push({
+                        text: element.textContent?.trim() || element.tagName || 'Element',
+                        url: window.location.href,
+                        href: element.href || element.getAttribute('href') || '',
+                        html: element.outerHTML,
+                        xpath: xpath,
+                        tagName: element.tagName,
+                        id: element.id || '',
+                        className: element.className || ''
+                    });
+                }
+            }
+        } catch (error) {
+            console.error(`Error evaluating XPath "${xpath}":`, error);
+            // Continue with other XPath expressions even if one fails
+        }
+    });
+    
+    return extractedElements;
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "togglePanel") {
         panel.classList.toggle('visible');
@@ -53,6 +92,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } else {
             document.removeEventListener('click', handleClick, true);
         }
+    } else if (request.action === "extractElementsByXPath") {
+        try {
+            const elements = extractElementsByXPath(request.xpathExpressions);
+            sendResponse({
+                success: true,
+                elements: elements,
+                count: elements.length
+            });
+        } catch (error) {
+            console.error('Error extracting elements:', error);
+            sendResponse({
+                success: false,
+                error: error.message || 'Unknown error occurred'
+            });
+        }
+        return true; // Indicates that the response is sent asynchronously
     }
     return true; // Indicates that the response is sent asynchronously
 });

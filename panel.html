@@ -7,6 +7,18 @@
 <body>
   <h1>XPath Web Crawler</h1>
   <div class="container">
+    <div class="input-section">
+      <h3>Input Text Areas</h3>
+      <div id="inputContainer">
+        <div class="input-row">
+          <textarea class="input-textarea" placeholder="Enter text here..."></textarea>
+          <button class="remove-btn" style="display: none;">X</button>
+        </div>
+      </div>
+      <button id="addInputBtn" class="add-input-btn">+ Add Text Area</button>
+      <button id="extractXPathBtn" class="extract-xpath-btn">Extract Elements</button>
+    </div>
+    
     <div class="switch-container">
       <label class="switch">
         <input type="checkbox" id="saveElementSwitch">
