@@ -3,17 +3,18 @@ document.addEventListener('DOMContentLoaded', function () {
   const clearButton = document.getElementById('clearButton');
   const displayTest = document.getElementById('displayTest');
   const saveElementSwitch = document.getElementById('saveElementSwitch');
+  const checkXPathSwitch = document.getElementById('checkXPathSwitch');
   const addInputBtn = document.getElementById('addInputBtn');
   const inputContainer = document.getElementById('inputContainer');
   const extractXPathBtn = document.getElementById('extractXPathBtn');
   const downloadPdfsBtn = document.getElementById('downloadPdfsBtn');
-  const sendToGeminiBtn = document.getElementById('sendToGeminiBtn');
   const geminiResponse = document.getElementById('geminiResponse');
   
   console.log('DOM elements found:');
   console.log('clearButton:', clearButton);
   console.log('displayTest:', displayTest);
   console.log('saveElementSwitch:', saveElementSwitch);
+  console.log('checkXPathSwitch:', checkXPathSwitch);
   console.log('addInputBtn:', addInputBtn);
   console.log('inputContainer:', inputContainer);
   console.log('extractXPathBtn:', extractXPathBtn);
@@ -198,148 +199,72 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // Gemini API Integration Functions
-  function getGeminiApiKey() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['geminiApiKey'], (result) => {
-        resolve(result.geminiApiKey || null);
-      });
-    });
-  }
+  // Initialize Gemini API module
+  const geminiAPI = new GeminiAPI();
 
-  function setGeminiApiKey(apiKey) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ geminiApiKey: apiKey }, () => {
-        resolve();
-      });
-    });
-  }
-
-  function collectAllElementsForGemini(elements) {
-    let allElements = [];
-    
-    elements.forEach(element => {
-      allElements.push({
-        text: element.text,
-        url: element.url,
-        href: element.href,
-        tagName: element.tagName,
-        isPdf: element.isPdf
-      });
-      
-      // Recursively collect children
-      if (element.children && element.children.length > 0) {
-        allElements = allElements.concat(collectAllElementsForGemini(element.children));
+  // Function to parse Gemini response and extract XPath options
+  function parseGeminiXPathResponse(responseText) {
+    try {
+      // Try to extract JSON from the response text
+      // Look for JSON object in the response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const jsonStr = jsonMatch[0];
+        const xpathOptions = JSON.parse(jsonStr);
+        
+        // Extract XPath values from the options
+        const xpathValues = Object.values(xpathOptions);
+        console.log('Parsed XPath options:', xpathValues);
+        return xpathValues;
+      } else {
+        console.warn('No JSON object found in Gemini response');
+        return [];
       }
-    });
-    
-    return allElements;
+    } catch (error) {
+      console.error('Error parsing Gemini response:', error);
+      console.log('Raw response:', responseText);
+      return [];
+    }
   }
 
-  async function sendToGemini() {
-    // Check if we have any extracted elements
-    if (savedElementsTree.length === 0) {
-      showGeminiResponse('No extracted elements found. Please extract some elements first.', 'error');
+  // Function to populate input areas with XPath options
+  function populateInputAreasWithXPaths(xpathOptions) {
+    if (!xpathOptions || xpathOptions.length === 0) {
+      console.log('No XPath options to populate');
       return;
     }
 
-    // Get API key
-    let apiKey = await getGeminiApiKey();
-    if (!apiKey) {
-      apiKey = prompt('Please enter your Gemini API key:');
-      if (!apiKey) {
-        showGeminiResponse('API key is required to use Gemini AI.', 'error');
-        return;
-      }
-      await setGeminiApiKey(apiKey);
+    console.log('Populating input areas with XPath options:', xpathOptions);
+
+    // Get current textareas
+    const currentTextareas = inputContainer.querySelectorAll('.input-textarea');
+    const currentCount = currentTextareas.length;
+
+    // Add new textareas if we need more than we have
+    while (inputContainer.querySelectorAll('.input-textarea').length < xpathOptions.length) {
+      addInputRow();
     }
 
-    // Disable button and show loading
-    sendToGeminiBtn.disabled = true;
-    sendToGeminiBtn.textContent = 'Sending to Gemini...';
-    showGeminiResponse('Sending data to Gemini AI...', 'loading');
+    // Get all textareas after adding new ones
+    const allTextareas = inputContainer.querySelectorAll('.input-textarea');
 
-    try {
-      // Collect all elements
-      const allElements = collectAllElementsForGemini(savedElementsTree);
-      
-      // Prepare the prompt
-      const prompt = `Analyze the following web scraping data and provide insights:
-
-Total Elements: ${allElements.length}
-PDF Files Found: ${allElements.filter(el => el.isPdf).length}
-
-Elements Data:
-${JSON.stringify(allElements, null, 2)}
-
-Please provide:
-1. A summary of the extracted content
-2. Key insights about the data structure
-3. Notable patterns or trends
-4. Recommendations for further analysis
-
-Format your response in a clear, structured way.`;
-
-      // Call Gemini API
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 2048,
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    // Populate each textarea with an XPath option
+    xpathOptions.forEach((xpath, index) => {
+      if (allTextareas[index]) {
+        allTextareas[index].value = xpath;
+        console.log(`Populated textarea ${index + 1} with:`, xpath);
       }
+    });
 
-      const data = await response.json();
-      
-      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        const geminiText = data.candidates[0].content.parts[0].text;
-        showGeminiResponse(geminiText, 'success');
-      } else {
-        throw new Error('Invalid response format from Gemini API');
-      }
+    // Save the updated data to storage
+    saveInputDataToStorage();
+    
+    // Update remove button visibility
+    updateRemoveButtonsVisibility();
 
-    } catch (error) {
-      console.error('Error calling Gemini API:', error);
-      showGeminiResponse(`Error: ${error.message}`, 'error');
-    } finally {
-      // Re-enable button
-      sendToGeminiBtn.disabled = false;
-      sendToGeminiBtn.textContent = 'Send to Gemini AI';
-    }
+    console.log(`Successfully populated ${xpathOptions.length} input areas with XPath options`);
   }
 
-  function showGeminiResponse(message, type = 'success') {
-    geminiResponse.innerHTML = '';
-    
-    if (type === 'loading') {
-      geminiResponse.innerHTML = `<p class="loading">${message}</p>`;
-    } else if (type === 'error') {
-      geminiResponse.innerHTML = `<div class="error">${message}</div>`;
-    } else {
-      geminiResponse.innerHTML = `
-        <h3>🤖 Gemini AI Analysis</h3>
-        <div>${message.replace(/\n/g, '<br>')}</div>
-      `;
-    }
-    
-    geminiResponse.classList.add('show');
-  }
 
   function extractElementsByXPath() {
     console.log('extractElementsByXPath function called!');
@@ -484,7 +409,6 @@ Format your response in a clear, structured way.`;
   addInputBtn.addEventListener('click', addInputRow);
   extractXPathBtn.addEventListener('click', extractElementsByXPath);
   downloadPdfsBtn.addEventListener('click', downloadAllPdfs);
-  sendToGeminiBtn.addEventListener('click', sendToGemini);
   
   console.log('Event listeners attached successfully');
   
@@ -619,6 +543,39 @@ Format your response in a clear, structured way.`;
       chrome.storage.local.set({ savedElementsTree: savedElementsTree });
       displayTest.innerHTML = '';
       renderTree(savedElementsTree, displayTest);
+    } else if (request.action === "analyzeElementWithGemini") {
+      // Call Gemini API to analyze the clicked element
+      geminiAPI.analyzeElement(
+        request.html,
+        request.text,
+        request.href,
+        // onProgress callback
+        (message) => {
+          geminiAPI.showResponse(message, 'loading', geminiResponse);
+        },
+        // onSuccess callback
+        (message) => {
+          geminiAPI.showResponse(message, 'success', geminiResponse);
+          
+          // Parse the Gemini response and populate input areas
+          const xpathOptions = parseGeminiXPathResponse(message);
+          if (xpathOptions.length > 0) {
+            populateInputAreasWithXPaths(xpathOptions);
+            
+            // Show success message about populated XPath options
+            const successMessage = `✅ Successfully populated ${xpathOptions.length} XPath option(s) in the input areas!`;
+            geminiAPI.showResponse(successMessage, 'success', geminiResponse);
+          } else {
+            // Show warning if no XPath options were found
+            const warningMessage = `⚠️ No XPath options found in the response. Please check the Gemini response format.`;
+            geminiAPI.showResponse(warningMessage, 'error', geminiResponse);
+          }
+        },
+        // onError callback
+        (message) => {
+          geminiAPI.showResponse(message, 'error', geminiResponse);
+        }
+      );
     }
   });
 
@@ -630,11 +587,19 @@ Format your response in a clear, structured way.`;
     });
   });
 
+  checkXPathSwitch.addEventListener('change', () => {
+    const checkXPathState = checkXPathSwitch.checked;
+    chrome.storage.local.set({ checkXPathState: checkXPathState });
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      chrome.tabs.sendMessage(tabs[0].id, { action: "toggleCheckXPath", checkXPath: checkXPathState });
+    });
+  });
+
   clearButton.addEventListener('click', () => {
     clearData();
   });
 
-  chrome.storage.local.get(['savedElementsTree', 'saveElementsState'], (result) => {
+  chrome.storage.local.get(['savedElementsTree', 'saveElementsState', 'checkXPathState'], (result) => {
     if (result.savedElementsTree) {
       savedElementsTree = result.savedElementsTree;
       displayTest.innerHTML = '';
@@ -642,6 +607,9 @@ Format your response in a clear, structured way.`;
     }
     if (result.saveElementsState !== undefined) {
       saveElementSwitch.checked = result.saveElementsState;
+    }
+    if (result.checkXPathState !== undefined) {
+      checkXPathSwitch.checked = result.checkXPathState;
     }
   });
 

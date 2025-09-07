@@ -26,12 +26,20 @@
       </label>
       <span class="switch-label">track clicks</span>  
     </div>
+    
+    <div class="switch-container">
+      <label class="switch">
+        <input type="checkbox" id="checkXPathSwitch">
+        <span class="slider round"></span>
+      </label>
+      <span class="switch-label">check xpath</span>  
+    </div>
     <button id="clearButton">Clear</button>
     <button id="downloadPdfsBtn" class="download-pdfs-btn">Download All PDFs</button>
-    <button id="sendToGeminiBtn" class="gemini-btn">Send to Gemini AI</button>
     <div id="displayTest"></div>
     <div id="geminiResponse" class="gemini-response"></div>
   </div>
+  <script src="gemini.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

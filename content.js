@@ -24,6 +24,20 @@ tab.addEventListener('click', () => {
 });
 
 let saveElements = false;
+let checkXPath = false;
+let clickListenerAttached = false;
+
+function updateClickListeners() {
+    const shouldAttachListener = saveElements || checkXPath;
+    
+    if (shouldAttachListener && !clickListenerAttached) {
+        document.addEventListener('click', handleClick, true);
+        clickListenerAttached = true;
+    } else if (!shouldAttachListener && clickListenerAttached) {
+        document.removeEventListener('click', handleClick, true);
+        clickListenerAttached = false;
+    }
+}
 
 // PDF Detection Functions
 function isPdfFile(href, element) {
@@ -110,20 +124,46 @@ function getPdfInfo(href, element) {
 }
 
 function handleClick(event) {
-    if (saveElements && event.target.tagName === 'A') {
+    if (event.target.tagName === 'A') {
         const href = event.target.href;
         const isPdf = isPdfFile(href, event.target);
         
-        chrome.runtime.sendMessage({ 
-            action: "elementClicked", 
-            text: event.target.textContent?.trim() || '',
-            url: window.location.href,
-            referrer: document.referrer,
-            href: href,
-            html: event.target.outerHTML,
-            isPdf: isPdf,
-            pdfInfo: isPdf ? getPdfInfo(href, event.target) : null
-        });
+        // If checkXPath is enabled, prevent navigation
+        if (checkXPath) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Visual feedback that the link was intercepted
+            event.target.style.backgroundColor = '#ffeb3b';
+            event.target.style.transition = 'background-color 0.3s';
+            setTimeout(() => {
+                event.target.style.backgroundColor = '';
+            }, 1000);
+        }
+        
+        // If saveElements is enabled, send the element data
+        if (saveElements) {
+            chrome.runtime.sendMessage({ 
+                action: "elementClicked", 
+                text: event.target.textContent?.trim() || '',
+                url: window.location.href,
+                referrer: document.referrer,
+                href: href,
+                html: event.target.outerHTML,
+                isPdf: isPdf,
+                pdfInfo: isPdf ? getPdfInfo(href, event.target) : null
+            });
+        }
+        
+        // Always trigger Gemini AI request for XPath analysis when checkXPath is enabled
+        if (checkXPath) {
+            chrome.runtime.sendMessage({
+                action: "analyzeElementWithGemini",
+                html: event.target.outerHTML,
+                text: event.target.textContent?.trim() || '',
+                href: href
+            });
+        }
     }
 }
 
@@ -291,11 +331,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
     } else if (request.action === "toggleSaveElement") {
         saveElements = request.save;
-        if (saveElements) {
-            document.addEventListener('click', handleClick, true);
-        } else {
-            document.removeEventListener('click', handleClick, true);
-        }
+        updateClickListeners();
+    } else if (request.action === "toggleCheckXPath") {
+        checkXPath = request.checkXPath;
+        updateClickListeners();
     } else if (request.action === "extractElementsByXPath") {
         (async () => {
             try {
@@ -318,12 +357,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Indicates that the response is sent asynchronously
 });
 
-// Request the initial state of the switch from the background script
+// Request the initial state of the switches from the background script
 chrome.runtime.sendMessage({ action: "getSaveElementsState" }, (response) => {
     if (response) {
         saveElements = response.save;
-        if (saveElements) {
-            document.addEventListener('click', handleClick, true);
-        }
+        updateClickListeners();
+    }
+});
+
+chrome.runtime.sendMessage({ action: "getCheckXPathState" }, (response) => {
+    if (response) {
+        checkXPath = response.checkXPath;
+        updateClickListeners();
     }
 });

@@ -35,7 +35,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["panel.html", "panel.css", "popup.js", "popup.css"],
+      "resources": ["panel.html", "panel.css", "popup.js", "popup.css", "gemini.js"],
       "matches": ["<all_urls>"]
     }
   ]
