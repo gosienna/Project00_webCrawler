@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function () {
       document.body.appendChild(savingIndicator);
     } else if (status === 'success') {
       savingIndicator = document.createElement('div');
-      savingIndicator.textContent = 'Saved ✓';
+      savingIndicator.textContent = 'Saved';
       savingIndicator.style.cssText = `
         position: fixed;
         top: 10px;
