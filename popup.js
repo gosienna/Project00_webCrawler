@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const clearButton = document.getElementById('clearButton');
   const displayTest = document.getElementById('displayTest');
   const saveElementSwitch = document.getElementById('saveElementSwitch');
-  const checkXPathSwitch = document.getElementById('checkXPathSwitch');
   const addInputBtn = document.getElementById('addInputBtn');
   const inputContainer = document.getElementById('inputContainer');
   const extractXPathBtn = document.getElementById('extractXPathBtn');
@@ -14,7 +13,6 @@ document.addEventListener('DOMContentLoaded', function () {
   console.log('clearButton:', clearButton);
   console.log('displayTest:', displayTest);
   console.log('saveElementSwitch:', saveElementSwitch);
-  console.log('checkXPathSwitch:', checkXPathSwitch);
   console.log('addInputBtn:', addInputBtn);
   console.log('inputContainer:', inputContainer);
   console.log('extractXPathBtn:', extractXPathBtn);
@@ -601,19 +599,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  checkXPathSwitch.addEventListener('change', () => {
-    const checkXPathState = checkXPathSwitch.checked;
-    chrome.storage.local.set({ checkXPathState: checkXPathState });
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "toggleCheckXPath", checkXPath: checkXPathState });
-    });
-  });
 
   clearButton.addEventListener('click', () => {
     clearData();
   });
 
-  chrome.storage.local.get(['savedElementsTree', 'saveElementsState', 'checkXPathState'], (result) => {
+  chrome.storage.local.get(['savedElementsTree', 'saveElementsState'], (result) => {
     if (result.savedElementsTree) {
       savedElementsTree = result.savedElementsTree;
       displayTest.innerHTML = '';
@@ -621,9 +612,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (result.saveElementsState !== undefined) {
       saveElementSwitch.checked = result.saveElementsState;
-    }
-    if (result.checkXPathState !== undefined) {
-      checkXPathSwitch.checked = result.checkXPathState;
     }
   });
 

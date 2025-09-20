@@ -24,12 +24,11 @@ tab.addEventListener('click', () => {
 });
 
 let saveElements = false;
-let checkXPath = false;
 let clickListenerAttached = false;
 let lastRightClickedElement = null;
 
 function updateClickListeners() {
-    const shouldAttachListener = saveElements || checkXPath;
+    const shouldAttachListener = saveElements;
     
     if (shouldAttachListener && !clickListenerAttached) {
         document.addEventListener('click', handleClick, true);
@@ -294,18 +293,6 @@ function handleClick(event) {
         const href = event.target.href;
         const isPdf = isPdfFile(href, event.target);
         
-        // If checkXPath is enabled, prevent navigation
-        if (checkXPath) {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            // Visual feedback that the link was intercepted
-            event.target.style.backgroundColor = '#ffeb3b';
-            event.target.style.transition = 'background-color 0.3s';
-            setTimeout(() => {
-                event.target.style.backgroundColor = '';
-            }, 1000);
-        }
         
         // If saveElements is enabled, send the element data
         if (saveElements) {
@@ -321,15 +308,6 @@ function handleClick(event) {
             });
         }
         
-        // Always trigger Gemini AI request for XPath analysis when checkXPath is enabled
-        if (checkXPath) {
-            chrome.runtime.sendMessage({
-                action: "analyzeElementWithGemini",
-                html: event.target.outerHTML,
-                text: event.target.textContent?.trim() || '',
-                href: href
-            });
-        }
     }
 }
 
@@ -498,9 +476,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (request.action === "toggleSaveElement") {
         saveElements = request.save;
         updateClickListeners();
-    } else if (request.action === "toggleCheckXPath") {
-        checkXPath = request.checkXPath;
-        updateClickListeners();
     } else if (request.action === "extractElementsByXPath") {
         (async () => {
             try {
@@ -662,13 +637,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.runtime.sendMessage({ action: "getSaveElementsState" }, (response) => {
     if (response) {
         saveElements = response.save;
-        updateClickListeners();
-    }
-});
-
-chrome.runtime.sendMessage({ action: "getCheckXPathState" }, (response) => {
-    if (response) {
-        checkXPath = response.checkXPath;
         updateClickListeners();
     }
 });
