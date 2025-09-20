@@ -370,6 +370,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const isRecursive = true; // Always use recursive extraction
 
+    // Generate and store a prompt for the extract elements action
+    const extractPrompt = geminiAPI.generateExtractElementsPrompt(xpathExpressions, isRecursive, window.location.href);
+    geminiAPI.storePrompt(extractPrompt, 'extract_elements');
+
     // Disable button during extraction
     extractXPathBtn.disabled = true;
     extractXPathBtn.textContent = 'Extracting (Recursive)...';
@@ -672,6 +676,18 @@ document.addEventListener('DOMContentLoaded', function () {
           geminiAPI.showResponse(message, 'error', geminiResponse);
         }
       );
+    } else if (request.action === "generateAndStoreElementPrompt") {
+      // Handle request to generate and store element prompt directly
+      const prompt = geminiAPI.generateAndStoreElementPrompt(
+        request.html,
+        request.text,
+        request.href
+      );
+      sendResponse({ 
+        success: true, 
+        prompt: prompt,
+        action: 'element_analysis'
+      });
     }
   });
 

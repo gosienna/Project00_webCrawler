@@ -482,6 +482,174 @@ async function extractElementsByXPath(xpathExpressions, recursive = false) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "togglePanel") {
         panel.classList.toggle('visible');
+    } else if (request.action === "copyPromptDirect") {
+        // Handle direct copy prompt request - generate prompt from clicked element
+        let element = null;
+        
+        console.log('Direct copy prompt triggered with coordinates:', request.clickX, request.clickY);
+        
+        // First try to use the last right-clicked element (most reliable)
+        if (lastRightClickedElement) {
+            console.log('Using last right-clicked element:', lastRightClickedElement.tagName, lastRightClickedElement.className);
+            element = lastRightClickedElement;
+        }
+        
+        // If no last clicked element, try coordinates
+        if (!element && request.clickX !== undefined && request.clickY !== undefined && 
+            isFinite(request.clickX) && isFinite(request.clickY)) {
+            try {
+                const elementFromPoint = document.elementFromPoint(request.clickX, request.clickY);
+                console.log('Element from point:', elementFromPoint?.tagName, elementFromPoint?.className);
+                
+                // If the element from point is a container, try to find a more specific element
+                if (elementFromPoint && (elementFromPoint.id === 'contentContainer' || 
+                    elementFromPoint.className.includes('container') ||
+                    elementFromPoint.tagName === 'BODY' ||
+                    elementFromPoint.tagName === 'HTML')) {
+                    console.log('Element from point is a container, searching for more specific element...');
+                    
+                    // Try to find elements with more specific selectors at the same coordinates
+                    const elementsAtPoint = document.elementsFromPoint(request.clickX, request.clickY);
+                    console.log('All elements at point:', elementsAtPoint.map(el => el.tagName + (el.className ? '.' + el.className : '') + (el.id ? '#' + el.id : '')));
+                    
+                    // Look for the first clickable element in the stack
+                    for (const el of elementsAtPoint) {
+                        if (el !== elementFromPoint && isClickableElement(el)) {
+                            console.log('Found clickable element in stack:', el.tagName, el.className);
+                            element = el;
+                            break;
+                        }
+                    }
+                } else {
+                    element = elementFromPoint;
+                }
+            } catch (error) {
+                console.warn('Error getting element from point:', error);
+            }
+        }
+        
+        // Final fallback: try to find highlighted elements
+        if (!element) {
+            const highlightedElements = document.querySelectorAll('[style*="background-color: rgb(255, 235, 59)"]');
+            if (highlightedElements.length > 0) {
+                element = highlightedElements[highlightedElements.length - 1];
+                console.log('Using highlighted element:', element.tagName, element.className);
+            }
+        }
+        
+        // Validate that the element is clickable
+        if (element) {
+            // Check if the current element is clickable
+            if (!isClickableElement(element)) {
+                // Try to find the nearest clickable parent
+                const clickableElement = findNearestClickableElement(element);
+                if (clickableElement) {
+                    element = clickableElement;
+                    console.log('Found clickable parent element:', element.tagName, element.className);
+                } else {
+                    // Fallback: Check if element has any interactive properties
+                    const hasInteractiveProperties = element.hasAttribute('href') || 
+                                                   element.hasAttribute('onclick') || 
+                                                   element.hasAttribute('data-href') ||
+                                                   element.hasAttribute('data-url') ||
+                                                   element.hasAttribute('data-link') ||
+                                                   element.classList.toString().toLowerCase().includes('link') ||
+                                                   element.classList.toString().toLowerCase().includes('click') ||
+                                                   element.classList.toString().toLowerCase().includes('button');
+                    
+                    if (hasInteractiveProperties) {
+                        console.log('Element has interactive properties, proceeding anyway:', element.tagName, element.className);
+                    } else {
+                        // Even more lenient fallback: if it's not a generic container, proceed anyway
+                        const isGenericContainer = element.id === 'contentContainer' || 
+                                                 element.className.includes('container') ||
+                                                 element.tagName === 'BODY' ||
+                                                 element.tagName === 'HTML' ||
+                                                 element.tagName === 'DIV' && !element.className && !element.id;
+                        
+                        if (!isGenericContainer) {
+                            console.log('Element is not a generic container, proceeding with analysis:', element.tagName, element.className);
+                        } else {
+                            console.log('Element is a generic container, cannot proceed');
+                            sendResponse({ success: false, message: 'Selected element is a generic container and not suitable for prompt generation' });
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (element) {
+            const href = element.href || element.getAttribute('href') || '';
+            const isPdf = isPdfFile(href, element);
+            
+            console.log('Processing element for direct prompt generation:', {
+                tagName: element.tagName,
+                className: element.className,
+                id: element.id,
+                href: href,
+                isPdf: isPdf,
+                text: element.textContent?.trim().substring(0, 50) + '...'
+            });
+            
+            // Generate and store prompt directly
+            chrome.runtime.sendMessage({
+                action: "generateAndStoreElementPrompt",
+                html: element.outerHTML,
+                text: element.textContent?.trim() || '',
+                href: href,
+                isPdf: isPdf,
+                pdfInfo: isPdf ? getPdfInfo(href, element) : null
+            }, (response) => {
+                if (response && response.success && response.prompt) {
+                    // Copy the prompt to clipboard
+                    navigator.clipboard.writeText(response.prompt).then(() => {
+                        // Show visual feedback
+                        const feedback = document.createElement('div');
+                        feedback.textContent = 'Element prompt copied to clipboard!';
+                        feedback.style.cssText = `
+                            position: fixed;
+                            top: 20px;
+                            right: 20px;
+                            background: #4CAF50;
+                            color: white;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            z-index: 10000;
+                            font-family: Arial, sans-serif;
+                            font-size: 14px;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                        `;
+                        document.body.appendChild(feedback);
+                        
+                        // Remove feedback after 3 seconds
+                        setTimeout(() => {
+                            if (feedback.parentNode) {
+                                feedback.parentNode.removeChild(feedback);
+                            }
+                        }, 3000);
+                        
+                        sendResponse({ success: true, message: 'Prompt generated and copied to clipboard' });
+                    }).catch((error) => {
+                        console.error('Failed to copy prompt:', error);
+                        sendResponse({ success: false, error: 'Failed to copy to clipboard' });
+                    });
+                } else {
+                    sendResponse({ success: false, error: 'Failed to generate prompt' });
+                }
+            });
+            
+            // Visual feedback that the element was selected
+            element.style.backgroundColor = '#ffeb3b';
+            element.style.transition = 'background-color 0.3s';
+            setTimeout(() => {
+                element.style.backgroundColor = '';
+            }, 1000);
+            
+        } else {
+            sendResponse({ success: false, message: 'No element found at click position' });
+        }
+        return true; // Indicates that the response is sent asynchronously
     } else if (request.action === "clearData") {
         const iframe = document.getElementById('panel-iframe');
         if (iframe) {
