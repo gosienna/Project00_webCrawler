@@ -80,12 +80,11 @@ class GeminiAPI {
       Element Href: ${elementHref}
 
       Provide multiple XPath expressions that can be used to select elements that have similar patterns.
-      Avoid patters using: id, element text, element href
       Return ONLY a valid JSON object with the following format (no additional text or explanation):
       {
-        "option1": xpath_pattern1(most specific),
-        "option2": xpath_pattern2(less specific),
-        "option3": xpath_pattern4(least specific)
+        "option1": xpath_pattern1(most specific) only identify the element being clicked,
+        "option2": xpath_pattern2(less specific) identify the elemnt withing same container, class,
+        "option3": xpath_pattern4(least specific) identify element not depend on ID, href, element text
       }
 
       Provide 3 different XPath options with varying specificity levels. Top to down, from most specific to least specific.`;
@@ -142,7 +141,7 @@ class GeminiAPI {
       responseElement.innerHTML = `<div class="error">${message}</div>`;
     } else {
       responseElement.innerHTML = `
-        <h3>🤖 Gemini AI Analysis</h3>
+        <h3>Gemini AI Analysis</h3>
         <div>${message.replace(/\n/g, '<br>')}</div>
       `;
     }
