@@ -79,15 +79,16 @@ class GeminiAPI {
       Element Text: ${elementText}
       Element Href: ${elementHref}
 
-      Please provide multiple XPath expressions that can be used to select this exact element.
+      Provide multiple XPath expressions that can be used to select elements that have similar patterns.
+      Avoid patters using: id, element text, element href
       Return ONLY a valid JSON object with the following format (no additional text or explanation):
       {
-        "option1": "//a[contains(text(), '${elementText}')]",
-        "option2": "//a[@href='${elementHref}']",
-        "option3": "//a[contains(@class, 'specific-class')]"
+        "option1": xpath_pattern1(most specific),
+        "option2": xpath_pattern2(less specific),
+        "option3": xpath_pattern4(least specific)
       }
 
-      Provide 2-4 different XPath options with varying specificity levels.`;
+      Provide 3 different XPath options with varying specificity levels. Top to down, from most specific to least specific.`;
 
       // Call Gemini API
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {

@@ -236,23 +236,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
     console.log('Populating input areas with XPath options:', xpathOptions);
 
-    // Get current textareas
+    // Get current textareas and their existing values
     const currentTextareas = inputContainer.querySelectorAll('.input-textarea');
-    const currentCount = currentTextareas.length;
+    const existingValues = Array.from(currentTextareas).map(textarea => textarea.value.trim()).filter(value => value.length > 0);
+    
+    console.log('Existing XPath patterns:', existingValues);
 
-    // Add new textareas if we need more than we have
-    while (inputContainer.querySelectorAll('.input-textarea').length < xpathOptions.length) {
-      addInputRow();
+    // Filter out duplicate XPath patterns that already exist
+    const newXpathOptions = xpathOptions.filter(xpath => !existingValues.includes(xpath));
+    
+    if (newXpathOptions.length === 0) {
+      console.log('All XPath options already exist in input areas');
+      return;
     }
+
+    console.log('New XPath options to add:', newXpathOptions);
+
+    // Add new textareas for the new XPath options
+    newXpathOptions.forEach(() => {
+      addInputRow();
+    });
 
     // Get all textareas after adding new ones
     const allTextareas = inputContainer.querySelectorAll('.input-textarea');
 
-    // Populate each textarea with an XPath option
-    xpathOptions.forEach((xpath, index) => {
-      if (allTextareas[index]) {
-        allTextareas[index].value = xpath;
-        console.log(`Populated textarea ${index + 1} with:`, xpath);
+    // Find empty textareas and populate them with new XPath options
+    let newXpathIndex = 0;
+    allTextareas.forEach((textarea, index) => {
+      if (textarea.value.trim() === '' && newXpathIndex < newXpathOptions.length) {
+        textarea.value = newXpathOptions[newXpathIndex];
+        console.log(`Populated empty textarea ${index + 1} with:`, newXpathOptions[newXpathIndex]);
+        newXpathIndex++;
       }
     });
 
@@ -262,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Update remove button visibility
     updateRemoveButtonsVisibility();
 
-    console.log(`Successfully populated ${xpathOptions.length} input areas with XPath options`);
+    console.log(`Successfully added ${newXpathOptions.length} new XPath options to input areas`);
   }
 
 
