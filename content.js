@@ -23,6 +23,40 @@ tab.addEventListener('click', () => {
     panel.classList.toggle('visible');
 });
 
+// Function to check if there's existing data and auto-show panel
+function checkAndShowPanelIfDataExists() {
+    chrome.storage.local.get(['xpathInputData', 'savedElementsTree'], (result) => {
+        const hasXpathData = result.xpathInputData && result.xpathInputData.length > 0;
+        const hasElementsData = result.savedElementsTree && result.savedElementsTree.length > 0;
+        
+        if (hasXpathData || hasElementsData) {
+            console.log('Found existing data, auto-showing panel');
+            panel.classList.add('visible');
+        }
+    });
+}
+
+// Check for existing data when the content script loads
+checkAndShowPanelIfDataExists();
+
+// Listen for storage changes to auto-show panel when data is added
+chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local') {
+        const xpathDataChanged = changes.xpathInputData;
+        const elementsDataChanged = changes.savedElementsTree;
+        
+        if (xpathDataChanged || elementsDataChanged) {
+            const hasXpathData = xpathDataChanged ? xpathDataChanged.newValue && xpathDataChanged.newValue.length > 0 : false;
+            const hasElementsData = elementsDataChanged ? elementsDataChanged.newValue && elementsDataChanged.newValue.length > 0 : false;
+            
+            if ((hasXpathData || hasElementsData) && !panel.classList.contains('visible')) {
+                console.log('Data added, auto-showing panel');
+                panel.classList.add('visible');
+            }
+        }
+    }
+});
+
 let clickListenerAttached = false;
 let lastRightClickedElement = null;
 

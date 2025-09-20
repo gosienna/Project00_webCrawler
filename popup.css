@@ -21,6 +21,8 @@ h1 {
   gap: 10px;
   padding: 10px;
   flex-grow: 1;
+  height: 100%;
+  min-height: 100vh;
 }
 
 /* Clear Buttons Container */
