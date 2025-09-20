@@ -23,16 +23,45 @@ h1 {
   flex-grow: 1;
 }
 
-#clearButton {
+/* Clear Buttons Container */
+.clear-buttons-container {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+/* Clear Elements Button */
+.clear-elements-btn {
+  flex: 1;
   padding: 10px;
   background-color: #f44336;
   color: white;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
 }
 
-#clearButton:hover {
+.clear-elements-btn:hover {
   background-color: #da190b;
+}
+
+/* Clear XPath Button */
+.clear-xpath-btn {
+  flex: 1;
+  padding: 10px;
+  background-color: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.clear-xpath-btn:hover {
+  background-color: #f57c00;
 }
 
 #displayTest {

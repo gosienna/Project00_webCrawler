@@ -452,6 +452,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (iframe) {
             iframe.contentWindow.postMessage({ action: "clearData" }, '*');
         }
+    } else if (request.action === "clearElementsTree") {
+        const iframe = document.getElementById('panel-iframe');
+        if (iframe) {
+            iframe.contentWindow.postMessage({ action: "clearElementsTree" }, '*');
+        }
+    } else if (request.action === "clearXPathInputs") {
+        const iframe = document.getElementById('panel-iframe');
+        if (iframe) {
+            iframe.contentWindow.postMessage({ action: "clearXPathInputs" }, '*');
+        }
     } else if (request.action === "highlightElementsByXPath") {
         // Handle XPath highlighting request
         try {

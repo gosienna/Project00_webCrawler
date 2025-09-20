@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
   console.log('DOM loaded, initializing...');
-  const clearButton = document.getElementById('clearButton');
   const displayTest = document.getElementById('displayTest');
   const addInputBtn = document.getElementById('addInputBtn');
   const inputContainer = document.getElementById('inputContainer');
@@ -9,7 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const geminiResponse = document.getElementById('geminiResponse');
   
   console.log('DOM elements found:');
-  console.log('clearButton:', clearButton);
   console.log('displayTest:', displayTest);
   console.log('addInputBtn:', addInputBtn);
   console.log('inputContainer:', inputContainer);
@@ -601,9 +599,42 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // Clear only the saved elements tree
+  function clearElementsTree() {
+    // Clear display area
+    displayTest.innerHTML = '';
+    
+    // Clear in-memory data
+    savedElementsTree = [];
+    
+    // Clear persistent storage for elements tree only
+    chrome.storage.local.set({ 
+      savedElementsTree: []
+    });
+    
+    console.log('Cleared saved elements tree');
+  }
+
+  // Clear only the XPath input data
+  function clearXPathInputs() {
+    // Clear all input text areas
+    clearAllInputs();
+    
+    // Clear persistent storage for XPath inputs only
+    chrome.storage.local.set({ 
+      xpathInputData: []
+    });
+    
+    console.log('Cleared XPath input data');
+  }
+
   window.addEventListener('message', (event) => {
     if (event.data.action === 'clearData') {
       clearData();
+    } else if (event.data.action === 'clearElementsTree') {
+      clearElementsTree();
+    } else if (event.data.action === 'clearXPathInputs') {
+      clearXPathInputs();
     }
   });
 
@@ -646,8 +677,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-  clearButton.addEventListener('click', () => {
-    clearData();
+  // Get the new clear buttons
+  const clearElementsBtn = document.getElementById('clearElementsBtn');
+  const clearXPathBtn = document.getElementById('clearXPathBtn');
+  
+  // Add event listeners for the new clear buttons
+  clearElementsBtn.addEventListener('click', () => {
+    clearElementsTree();
+  });
+  
+  clearXPathBtn.addEventListener('click', () => {
+    clearXPathInputs();
   });
 
   chrome.storage.local.get(['savedElementsTree'], (result) => {
