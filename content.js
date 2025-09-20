@@ -26,6 +26,7 @@ tab.addEventListener('click', () => {
 let saveElements = false;
 let checkXPath = false;
 let clickListenerAttached = false;
+let lastRightClickedElement = null;
 
 function updateClickListeners() {
     const shouldAttachListener = saveElements || checkXPath;
@@ -37,6 +38,171 @@ function updateClickListeners() {
         document.removeEventListener('click', handleClick, true);
         clickListenerAttached = false;
     }
+}
+
+// Add right-click event listener to capture the last right-clicked element
+document.addEventListener('contextmenu', (event) => {
+    // Try to find the most specific clickable element
+    let target = event.target;
+    
+    // If the target is a text node, get its parent element
+    if (target.nodeType === Node.TEXT_NODE) {
+        target = target.parentElement;
+    }
+    
+    // Look for the nearest clickable element starting from the target
+    let clickableElement = target;
+    let current = target;
+    let depth = 0;
+    
+    while (current && current !== document.body && depth < 5) {
+        if (isClickableElement(current)) {
+            clickableElement = current;
+            break;
+        }
+        current = current.parentElement;
+        depth++;
+    }
+    
+    lastRightClickedElement = clickableElement;
+    console.log('Right-click captured element:', clickableElement.tagName, clickableElement.className, clickableElement.id);
+}, true);
+
+// Function to check if an element is clickable
+function isClickableElement(element) {
+    if (!element) {
+        console.log('isClickableElement: element is null/undefined');
+        return false;
+    }
+    
+    console.log('Checking if element is clickable:', {
+        tagName: element.tagName,
+        className: element.className,
+        id: element.id,
+        href: element.href || element.getAttribute('href'),
+        onclick: element.onclick !== null,
+        role: element.getAttribute('role'),
+        tabindex: element.getAttribute('tabindex')
+    });
+    
+    // Check if element has pointer-events: none
+    const computedStyle = window.getComputedStyle(element);
+    if (computedStyle.pointerEvents === 'none') {
+        console.log('Element has pointer-events: none');
+        return false;
+    }
+    
+    // Check if element is visible
+    if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+        console.log('Element is not visible');
+        return false;
+    }
+    
+    // Check if element has opacity 0
+    if (parseFloat(computedStyle.opacity) === 0) {
+        console.log('Element has opacity 0');
+        return false;
+    }
+    
+    // Check if element is disabled
+    if (element.disabled === true) {
+        console.log('Element is disabled');
+        return false;
+    }
+    
+    // Check if element is a clickable tag
+    const clickableTags = ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL'];
+    if (clickableTags.includes(element.tagName)) {
+        console.log('Element is a clickable tag:', element.tagName);
+        return true;
+    }
+    
+    // Check if element has click event listeners
+    if (element.onclick !== null) {
+        console.log('Element has onclick handler');
+        return true;
+    }
+    
+    // Check if element has role attributes that make it clickable
+    const role = element.getAttribute('role');
+    const clickableRoles = ['button', 'link', 'menuitem', 'tab', 'option', 'checkbox', 'radio'];
+    if (role && clickableRoles.includes(role.toLowerCase())) {
+        console.log('Element has clickable role:', role);
+        return true;
+    }
+    
+    // Check if element has tabindex (makes it focusable/clickable)
+    if (element.hasAttribute('tabindex') && element.getAttribute('tabindex') !== '-1') {
+        console.log('Element has tabindex:', element.getAttribute('tabindex'));
+        return true;
+    }
+    
+    // Check if element has data attributes that suggest it's interactive
+    const interactiveDataAttrs = ['data-toggle', 'data-target', 'data-dismiss', 'data-bs-toggle', 'data-bs-target', 'data-click', 'data-action'];
+    if (interactiveDataAttrs.some(attr => element.hasAttribute(attr))) {
+        console.log('Element has interactive data attributes');
+        return true;
+    }
+    
+    // Check if element has classes that suggest it's clickable
+    const clickableClasses = ['btn', 'button', 'link', 'clickable', 'interactive', 'nav-link', 'dropdown-toggle', 'menu-item', 'tab', 'card', 'item'];
+    const classList = Array.from(element.classList);
+    const hasClickableClass = clickableClasses.some(cls => classList.some(elementClass => 
+        elementClass.toLowerCase().includes(cls.toLowerCase())
+    ));
+    if (hasClickableClass) {
+        console.log('Element has clickable classes');
+        return true;
+    }
+    
+    // Check if element has href attribute (even if not an A tag)
+    if (element.hasAttribute('href') && element.getAttribute('href') !== '') {
+        console.log('Element has href attribute');
+        return true;
+    }
+    
+    // Check if element is inside a clickable container
+    let parent = element.parentElement;
+    let depth = 0;
+    while (parent && parent !== document.body && depth < 10) { // Limit depth to prevent infinite loops
+        if (clickableTags.includes(parent.tagName) || 
+            parent.onclick !== null || 
+            parent.hasAttribute('tabindex') ||
+            parent.hasAttribute('href')) {
+            console.log('Element is inside clickable parent:', parent.tagName);
+            return true;
+        }
+        parent = parent.parentElement;
+        depth++;
+    }
+    
+    console.log('Element is not clickable');
+    return false;
+}
+
+// Function to find the nearest clickable parent element
+function findNearestClickableElement(element) {
+    if (!element) {
+        console.log('findNearestClickableElement: element is null/undefined');
+        return null;
+    }
+    
+    console.log('Searching for clickable parent starting from:', element.tagName, element.className);
+    
+    let current = element;
+    let depth = 0;
+    while (current && current !== document.body && depth < 10) { // Limit depth to prevent infinite loops
+        console.log(`Checking parent at depth ${depth}:`, current.tagName, current.className);
+        if (isClickableElement(current)) {
+            console.log('Found clickable parent:', current.tagName, current.className);
+            return current;
+        }
+        current = current.parentElement;
+        depth++;
+    }
+    
+    console.log('No clickable parent found');
+    return null;
 }
 
 // PDF Detection Functions
@@ -353,6 +519,141 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         })();
         return true; // Indicates that the response is sent asynchronously
+    } else if (request.action === "extractXPathFromElement") {
+        // Handle right-click context menu action
+        let element = null;
+        
+        console.log('Right-click context menu triggered with coordinates:', request.clickX, request.clickY);
+        
+        // First try to use the last right-clicked element (most reliable)
+        if (lastRightClickedElement) {
+            console.log('Using last right-clicked element:', lastRightClickedElement.tagName, lastRightClickedElement.className);
+            element = lastRightClickedElement;
+        }
+        
+        // If no last clicked element, try coordinates
+        if (!element && request.clickX !== undefined && request.clickY !== undefined && 
+            isFinite(request.clickX) && isFinite(request.clickY)) {
+            try {
+                const elementFromPoint = document.elementFromPoint(request.clickX, request.clickY);
+                console.log('Element from point:', elementFromPoint?.tagName, elementFromPoint?.className);
+                
+                // If the element from point is a container, try to find a more specific element
+                if (elementFromPoint && (elementFromPoint.id === 'contentContainer' || 
+                    elementFromPoint.className.includes('container') ||
+                    elementFromPoint.tagName === 'BODY' ||
+                    elementFromPoint.tagName === 'HTML')) {
+                    console.log('Element from point is a container, searching for more specific element...');
+                    
+                    // Try to find elements with more specific selectors at the same coordinates
+                    const elementsAtPoint = document.elementsFromPoint(request.clickX, request.clickY);
+                    console.log('All elements at point:', elementsAtPoint.map(el => el.tagName + (el.className ? '.' + el.className : '') + (el.id ? '#' + el.id : '')));
+                    
+                    // Look for the first clickable element in the stack
+                    for (const el of elementsAtPoint) {
+                        if (el !== elementFromPoint && isClickableElement(el)) {
+                            console.log('Found clickable element in stack:', el.tagName, el.className);
+                            element = el;
+                            break;
+                        }
+                    }
+                } else {
+                    element = elementFromPoint;
+                }
+            } catch (error) {
+                console.warn('Error getting element from point:', error);
+            }
+        }
+        
+        // Final fallback: try to find highlighted elements
+        if (!element) {
+            const highlightedElements = document.querySelectorAll('[style*="background-color: rgb(255, 235, 59)"]');
+            if (highlightedElements.length > 0) {
+                element = highlightedElements[highlightedElements.length - 1];
+                console.log('Using highlighted element:', element.tagName, element.className);
+            }
+        }
+        
+        // Validate that the element is clickable
+        if (element) {
+            // Check if the current element is clickable
+            if (!isClickableElement(element)) {
+                // Try to find the nearest clickable parent
+                const clickableElement = findNearestClickableElement(element);
+                if (clickableElement) {
+                    element = clickableElement;
+                    console.log('Found clickable parent element:', element.tagName, element.className);
+                } else {
+                    // Fallback: Check if element has any interactive properties
+                    const hasInteractiveProperties = element.hasAttribute('href') || 
+                                                   element.hasAttribute('onclick') || 
+                                                   element.hasAttribute('data-href') ||
+                                                   element.hasAttribute('data-url') ||
+                                                   element.hasAttribute('data-link') ||
+                                                   element.classList.toString().toLowerCase().includes('link') ||
+                                                   element.classList.toString().toLowerCase().includes('click') ||
+                                                   element.classList.toString().toLowerCase().includes('button');
+                    
+                    if (hasInteractiveProperties) {
+                        console.log('Element has interactive properties, proceeding anyway:', element.tagName, element.className);
+                    } else {
+                        // Even more lenient fallback: if it's not a generic container, proceed anyway
+                        const isGenericContainer = element.id === 'contentContainer' || 
+                                                 element.className.includes('container') ||
+                                                 element.tagName === 'BODY' ||
+                                                 element.tagName === 'HTML' ||
+                                                 element.tagName === 'DIV' && !element.className && !element.id;
+                        
+                        if (!isGenericContainer) {
+                            console.log('Element is not a generic container, proceeding with analysis:', element.tagName, element.className);
+                        } else {
+                            console.log('Element is a generic container, cannot proceed');
+                            sendResponse({ success: false, message: 'Selected element is a generic container and not suitable for XPath analysis' });
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (element) {
+            const href = element.href || element.getAttribute('href') || '';
+            const isPdf = isPdfFile(href, element);
+            
+            console.log('Processing clickable element:', {
+                tagName: element.tagName,
+                className: element.className,
+                id: element.id,
+                href: href,
+                isPdf: isPdf,
+                text: element.textContent?.trim().substring(0, 50) + '...'
+            });
+            
+            // Send element data to popup for Gemini AI analysis
+            chrome.runtime.sendMessage({
+                action: "analyzeElementWithGemini",
+                html: element.outerHTML,
+                text: element.textContent?.trim() || '',
+                href: href,
+                isPdf: isPdf,
+                pdfInfo: isPdf ? getPdfInfo(href, element) : null
+            });
+            
+            // Visual feedback that the element was selected
+            element.style.backgroundColor = '#ffeb3b';
+            element.style.transition = 'background-color 0.3s';
+            setTimeout(() => {
+                element.style.backgroundColor = '';
+            }, 1000);
+            
+            sendResponse({ 
+                success: true, 
+                message: `Clickable element selected for XPath analysis: ${element.tagName}${element.id ? '#' + element.id : ''}${element.className ? '.' + element.className.split(' ').join('.') : ''}` 
+            });
+        } else {
+            sendResponse({ success: false, message: 'No element found at click position' });
+        }
+        return true;
     }
     return true; // Indicates that the response is sent asynchronously
 });
