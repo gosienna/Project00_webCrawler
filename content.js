@@ -88,8 +88,9 @@ document.addEventListener('contextmenu', (event) => {
     let clickableElement = target;
     let current = target;
     let depth = 0;
+    let search_max_depth = 5;
     
-    while (current && current !== document.body && depth < 5) {
+    while (current && current !== document.body && depth < search_max_depth) {
         if (isClickableElement(current)) {
             clickableElement = current;
             break;
