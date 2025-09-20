@@ -50,7 +50,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const inputRow = button.parentElement;
     inputRow.remove();
     updateRemoveButtonsVisibility();
-    saveInputDataToStorage();
+    // Save immediately when removing a row
+    saveInputDataToStorageImmediate();
   }
 
   function updateRemoveButtonsVisibility() {
@@ -146,22 +147,187 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function getAllInputTexts() {
+    // Only get textareas from current input-row elements
+    const inputRows = inputContainer.querySelectorAll('.input-row');
     const textareas = inputContainer.querySelectorAll('.input-textarea');
+    
+    console.log('Found input rows:', inputRows.length);
     console.log('Found textareas:', textareas.length);
-    const values = Array.from(textareas).map(textarea => textarea.value.trim()).filter(text => text.length > 0);
-    console.log('XPath expressions found:', values);
+    
+    // Filter to only include textareas that are in visible input-row elements
+    const values = Array.from(textareas)
+      .filter(textarea => {
+        const inputRow = textarea.closest('.input-row');
+        return inputRow && inputRow.parentElement === inputContainer;
+      })
+      .map(textarea => textarea.value.trim())
+      .filter(text => text.length > 0);
+    
+    console.log('Current XPath expressions from input-row elements:', values);
     return values;
   }
 
   function clearAllInputs() {
     const textareas = inputContainer.querySelectorAll('.input-textarea');
     textareas.forEach(textarea => textarea.value = '');
-    saveInputDataToStorage();
+    saveInputDataToStorageImmediate();
+  }
+
+  function clearXPathInputDataStorage() {
+    console.log('Clearing XPath input data from storage');
+    chrome.storage.local.set({ xpathInputData: [] }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('Error clearing XPath input data from storage:', chrome.runtime.lastError);
+      } else {
+        console.log('XPath input data cleared from storage successfully');
+      }
+    });
+  }
+
+  // Debounce timer for saving input data
+  let saveInputDataTimeout = null;
+  let savingIndicator = null;
+
+  function showSavingIndicator(status = 'saving') {
+    // Remove existing indicator
+    if (savingIndicator) {
+      savingIndicator.remove();
+      savingIndicator = null;
+    }
+
+    if (status === 'saving') {
+      savingIndicator = document.createElement('div');
+      savingIndicator.textContent = 'Saving...';
+      savingIndicator.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: #2196F3;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 12px;
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+      `;
+      document.body.appendChild(savingIndicator);
+    } else if (status === 'success') {
+      savingIndicator = document.createElement('div');
+      savingIndicator.textContent = 'Saved ✓';
+      savingIndicator.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: #4CAF50;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 12px;
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+      `;
+      document.body.appendChild(savingIndicator);
+      
+      // Remove after 2 seconds
+      setTimeout(() => {
+        if (savingIndicator) {
+          savingIndicator.remove();
+          savingIndicator = null;
+        }
+      }, 2000);
+    } else if (status === 'error') {
+      savingIndicator = document.createElement('div');
+      savingIndicator.textContent = 'Save Error ✗';
+      savingIndicator.style.cssText = `
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: #f44336;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 12px;
+        z-index: 1000;
+        font-family: Arial, sans-serif;
+      `;
+      document.body.appendChild(savingIndicator);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        if (savingIndicator) {
+          savingIndicator.remove();
+          savingIndicator = null;
+        }
+      }, 3000);
+    }
   }
 
   function saveInputDataToStorage() {
+    // Clear existing timeout
+    if (saveInputDataTimeout) {
+      clearTimeout(saveInputDataTimeout);
+    }
+    
+    // Set new timeout to save after 300ms of inactivity
+    saveInputDataTimeout = setTimeout(() => {
+      const inputData = getAllInputTexts();
+      console.log('Saving XPath input data to storage:', inputData);
+      
+      // Show saving indicator
+      showSavingIndicator();
+      
+      // Clear existing data first, then save only current XPath patterns
+      chrome.storage.local.set({ xpathInputData: [] }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error clearing XPath input data:', chrome.runtime.lastError);
+          showSavingIndicator('error');
+        } else {
+          // Now save the current data
+          chrome.storage.local.set({ xpathInputData: inputData }, () => {
+            if (chrome.runtime.lastError) {
+              console.error('Error saving XPath input data:', chrome.runtime.lastError);
+              showSavingIndicator('error');
+            } else {
+              console.log('XPath input data cleared and saved successfully');
+              showSavingIndicator('success');
+            }
+          });
+        }
+      });
+    }, 300);
+  }
+
+  function saveInputDataToStorageImmediate() {
+    // Clear any pending timeout
+    if (saveInputDataTimeout) {
+      clearTimeout(saveInputDataTimeout);
+    }
+    
+    // Save immediately
     const inputData = getAllInputTexts();
-    chrome.storage.local.set({ xpathInputData: inputData });
+    console.log('Saving XPath input data immediately:', inputData);
+    
+    // Show saving indicator
+    showSavingIndicator();
+    
+    // Clear existing data first, then save only current XPath patterns
+    chrome.storage.local.set({ xpathInputData: [] }, () => {
+      if (chrome.runtime.lastError) {
+        console.error('Error clearing XPath input data immediately:', chrome.runtime.lastError);
+        showSavingIndicator('error');
+      } else {
+        // Now save the current data
+        chrome.storage.local.set({ xpathInputData: inputData }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('Error saving XPath input data immediately:', chrome.runtime.lastError);
+            showSavingIndicator('error');
+          } else {
+            console.log('XPath input data cleared and saved immediately');
+            showSavingIndicator('success');
+          }
+        });
+      }
+    });
   }
 
   function loadInputDataFromStorage() {
@@ -347,8 +513,8 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
 
-    // Save the updated data to storage
-    saveInputDataToStorage();
+    // Save the updated data to storage immediately
+    saveInputDataToStorageImmediate();
     
     // Update remove button visibility
     updateRemoveButtonsVisibility();
@@ -625,9 +791,7 @@ document.addEventListener('DOMContentLoaded', function () {
     clearAllInputs();
     
     // Clear persistent storage for XPath inputs only
-    chrome.storage.local.set({ 
-      xpathInputData: []
-    });
+    clearXPathInputDataStorage();
     
     console.log('Cleared XPath input data');
   }
