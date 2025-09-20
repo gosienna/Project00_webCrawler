@@ -236,6 +236,13 @@ input:checked + .slider:before {
   box-shadow: 0 0 3px rgba(33, 150, 243, 0.3);
 }
 
+.input-textarea:hover {
+  border-color: #ff9800;
+  box-shadow: 0 0 5px rgba(255, 152, 0, 0.3);
+  background-color: #fff8e1;
+  transition: all 0.2s ease;
+}
+
 .remove-btn {
   width: 24px;
   height: 24px;

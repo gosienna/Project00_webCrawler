@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', function () {
     textarea.placeholder = 'Enter text here...';
     textarea.setAttribute('data-row-id', inputRowCount);
     textarea.addEventListener('input', saveInputDataToStorage);
+    addHoverListeners(textarea);
     
     const removeBtn = document.createElement('button');
     removeBtn.className = 'remove-btn';
@@ -61,6 +62,88 @@ document.addEventListener('DOMContentLoaded', function () {
     // Show remove buttons only if there's more than one row
     removeButtons.forEach(btn => {
       btn.style.display = inputRows.length > 1 ? 'flex' : 'none';
+    });
+  }
+
+  // Add hover listeners to textarea for XPath highlighting
+  function addHoverListeners(textarea) {
+    let hoverTimeout;
+    let isHovering = false;
+    
+    textarea.addEventListener('mouseenter', () => {
+      isHovering = true;
+      const xpath = textarea.value.trim();
+      if (xpath) {
+        // Small delay to prevent flickering
+        hoverTimeout = setTimeout(() => {
+          if (isHovering) { // Double-check we're still hovering
+            highlightElementsByXPath(xpath);
+          }
+        }, 300);
+      }
+    });
+    
+    textarea.addEventListener('mouseleave', () => {
+      isHovering = false;
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+      }
+      // Clear highlights after a short delay
+      setTimeout(() => {
+        if (!isHovering) { // Only clear if we're not hovering anymore
+          clearHighlights();
+        }
+      }, 100);
+    });
+    
+    // Also clear highlights when textarea loses focus
+    textarea.addEventListener('blur', () => {
+      isHovering = false;
+      if (hoverTimeout) {
+        clearTimeout(hoverTimeout);
+      }
+      setTimeout(() => {
+        clearHighlights();
+      }, 100);
+    });
+  }
+
+  // Function to highlight elements matching the XPath
+  function highlightElementsByXPath(xpath) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: "highlightElementsByXPath",
+          xpath: xpath
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error highlighting elements:', chrome.runtime.lastError);
+          } else if (response && response.success) {
+            console.log(`Highlighted ${response.count} elements matching XPath: ${xpath}`);
+            // Optional: Show a brief visual indicator in the textarea
+            if (response.count === 0) {
+              console.warn('No elements found matching XPath:', xpath);
+            }
+          } else if (response && !response.success) {
+            console.error('XPath highlighting failed:', response.error);
+          }
+        });
+      }
+    });
+  }
+
+  // Function to clear all highlights
+  function clearHighlights() {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: "clearHighlights"
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error clearing highlights:', chrome.runtime.lastError);
+          }
+        });
+      }
     });
   }
 
@@ -433,6 +516,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const existingTextareas = inputContainer.querySelectorAll('.input-textarea');
   existingTextareas.forEach(textarea => {
     textarea.addEventListener('input', saveInputDataToStorage);
+    addHoverListeners(textarea);
   });
 
   function findParent(nodes, url) {

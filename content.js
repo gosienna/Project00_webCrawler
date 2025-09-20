@@ -26,6 +26,19 @@ tab.addEventListener('click', () => {
 let clickListenerAttached = false;
 let lastRightClickedElement = null;
 
+// Function to clear all highlights
+function clearAllHighlights() {
+    // Find all elements with the xpath-highlight class
+    const highlightedElements = document.querySelectorAll('.xpath-highlight');
+    
+    highlightedElements.forEach(element => {
+        // Remove the highlight class
+        element.classList.remove('xpath-highlight');
+    });
+    
+    console.log(`Cleared highlights from ${highlightedElements.length} elements`);
+}
+
 
 // Add right-click event listener to capture the last right-clicked element
 document.addEventListener('contextmenu', (event) => {
@@ -439,6 +452,64 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (iframe) {
             iframe.contentWindow.postMessage({ action: "clearData" }, '*');
         }
+    } else if (request.action === "highlightElementsByXPath") {
+        // Handle XPath highlighting request
+        try {
+            const xpath = request.xpath;
+            console.log('Highlighting elements with XPath:', xpath);
+            
+            // Clear any existing highlights first
+            clearAllHighlights();
+            
+            // Find elements matching the XPath
+            const result = document.evaluate(
+                xpath,
+                document,
+                null,
+                XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
+                null
+            );
+            
+            const highlightedElements = [];
+            for (let i = 0; i < result.snapshotLength; i++) {
+                const element = result.snapshotItem(i);
+                if (element) {
+                    // Add highlight class
+                    element.classList.add('xpath-highlight');
+                    highlightedElements.push(element);
+                }
+            }
+            
+            console.log(`Highlighted ${highlightedElements.length} elements`);
+            sendResponse({
+                success: true,
+                count: highlightedElements.length,
+                message: `Highlighted ${highlightedElements.length} elements matching XPath`
+            });
+        } catch (error) {
+            console.error('Error highlighting elements with XPath:', error);
+            sendResponse({
+                success: false,
+                error: error.message || 'Invalid XPath expression'
+            });
+        }
+        return true;
+    } else if (request.action === "clearHighlights") {
+        // Handle clear highlights request
+        try {
+            clearAllHighlights();
+            sendResponse({
+                success: true,
+                message: 'All highlights cleared'
+            });
+        } catch (error) {
+            console.error('Error clearing highlights:', error);
+            sendResponse({
+                success: false,
+                error: error.message || 'Error clearing highlights'
+            });
+        }
+        return true;
     } else if (request.action === "extractElementsByXPath") {
         (async () => {
             try {
