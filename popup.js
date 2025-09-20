@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', function () {
   console.log('DOM loaded, initializing...');
   const clearButton = document.getElementById('clearButton');
   const displayTest = document.getElementById('displayTest');
-  const saveElementSwitch = document.getElementById('saveElementSwitch');
   const addInputBtn = document.getElementById('addInputBtn');
   const inputContainer = document.getElementById('inputContainer');
   const extractXPathBtn = document.getElementById('extractXPathBtn');
@@ -12,7 +11,6 @@ document.addEventListener('DOMContentLoaded', function () {
   console.log('DOM elements found:');
   console.log('clearButton:', clearButton);
   console.log('displayTest:', displayTest);
-  console.log('saveElementSwitch:', saveElementSwitch);
   console.log('addInputBtn:', addInputBtn);
   console.log('inputContainer:', inputContainer);
   console.log('extractXPathBtn:', extractXPathBtn);
@@ -512,7 +510,7 @@ document.addEventListener('DOMContentLoaded', function () {
     savedElementsTree = [];
     clearAllInputs();
     
-    // Clear persistent storage (preserve saveElementsState toggle)
+    // Clear persistent storage
     chrome.storage.local.set({ 
       savedElementsTree: [],
       xpathInputData: []
@@ -526,36 +524,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "elementClicked") {
-      const newNode = {
-        text: request.text,
-        url: request.url, //element current url
-        href: request.href, //where the element leading to
-        html: request.html, //the html string of the element
-        xpath: "", //potential xpath pattern that match this element
-        isPdf: request.isPdf || false,
-        pdfInfo: request.pdfInfo || null,
-        children: []
-      };
-
-      const parent = findParent(savedElementsTree, request.url);
-
-      if (parent) {
-        const isDuplicate = parent.children.some(item => item.text === newNode.text && item.url === newNode.url);
-        if (!isDuplicate) {
-          parent.children.push(newNode);
-        }
-      } else {
-        const isDuplicate = savedElementsTree.some(item => item.text === newNode.text && item.url === newNode.url);
-        if (!isDuplicate) {
-          savedElementsTree.push(newNode);
-        }
-      }
-
-      chrome.storage.local.set({ savedElementsTree: savedElementsTree });
-      displayTest.innerHTML = '';
-      renderTree(savedElementsTree, displayTest);
-    } else if (request.action === "analyzeElementWithGemini") {
+    if (request.action === "analyzeElementWithGemini") {
       // Call Gemini API to analyze the clicked element
       geminiAPI.analyzeElement(
         request.html,
@@ -591,27 +560,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  saveElementSwitch.addEventListener('change', () => {
-    const saveState = saveElementSwitch.checked;
-    chrome.storage.local.set({ saveElementsState: saveState });
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id, { action: "toggleSaveElement", save: saveState });
-    });
-  });
 
 
   clearButton.addEventListener('click', () => {
     clearData();
   });
 
-  chrome.storage.local.get(['savedElementsTree', 'saveElementsState'], (result) => {
+  chrome.storage.local.get(['savedElementsTree'], (result) => {
     if (result.savedElementsTree) {
       savedElementsTree = result.savedElementsTree;
       displayTest.innerHTML = '';
       renderTree(savedElementsTree, displayTest);
-    }
-    if (result.saveElementsState !== undefined) {
-      saveElementSwitch.checked = result.saveElementsState;
     }
   });
 

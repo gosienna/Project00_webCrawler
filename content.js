@@ -23,21 +23,9 @@ tab.addEventListener('click', () => {
     panel.classList.toggle('visible');
 });
 
-let saveElements = false;
 let clickListenerAttached = false;
 let lastRightClickedElement = null;
 
-function updateClickListeners() {
-    const shouldAttachListener = saveElements;
-    
-    if (shouldAttachListener && !clickListenerAttached) {
-        document.addEventListener('click', handleClick, true);
-        clickListenerAttached = true;
-    } else if (!shouldAttachListener && clickListenerAttached) {
-        document.removeEventListener('click', handleClick, true);
-        clickListenerAttached = false;
-    }
-}
 
 // Add right-click event listener to capture the last right-clicked element
 document.addEventListener('contextmenu', (event) => {
@@ -288,28 +276,6 @@ function getPdfInfo(href, element) {
     return info;
 }
 
-function handleClick(event) {
-    if (event.target.tagName === 'A') {
-        const href = event.target.href;
-        const isPdf = isPdfFile(href, event.target);
-        
-        
-        // If saveElements is enabled, send the element data
-        if (saveElements) {
-            chrome.runtime.sendMessage({ 
-                action: "elementClicked", 
-                text: event.target.textContent?.trim() || '',
-                url: window.location.href,
-                referrer: document.referrer,
-                href: href,
-                html: event.target.outerHTML,
-                isPdf: isPdf,
-                pdfInfo: isPdf ? getPdfInfo(href, event.target) : null
-            });
-        }
-        
-    }
-}
 
 async function extractElementsByXPath(xpathExpressions, recursive = false) {
     const processedUrls = new Set();
@@ -473,9 +439,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (iframe) {
             iframe.contentWindow.postMessage({ action: "clearData" }, '*');
         }
-    } else if (request.action === "toggleSaveElement") {
-        saveElements = request.save;
-        updateClickListeners();
     } else if (request.action === "extractElementsByXPath") {
         (async () => {
             try {
@@ -633,10 +596,3 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Indicates that the response is sent asynchronously
 });
 
-// Request the initial state of the switches from the background script
-chrome.runtime.sendMessage({ action: "getSaveElementsState" }, (response) => {
-    if (response) {
-        saveElements = response.save;
-        updateClickListeners();
-    }
-});
